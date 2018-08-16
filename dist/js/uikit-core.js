@@ -1,4 +1,4 @@
-/*! UIkit 3.0.0-rc.9 | http://www.getuikit.com | (c) 2014 - 2017 YOOtheme | MIT License */
+/*! UIkit 3.0.0-rc.11 | http://www.getuikit.com | (c) 2014 - 2018 YOOtheme | MIT License */
 
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
@@ -13,8 +13,8 @@
         };
     }
 
-    var ref = Object.prototype;
-    var hasOwnProperty = ref.hasOwnProperty;
+    var objPrototype = Object.prototype;
+    var hasOwnProperty = objPrototype.hasOwnProperty;
 
     function hasOwn(obj, key) {
         return hasOwnProperty.call(obj, key);
@@ -80,7 +80,7 @@
     }
 
     function isPlainObject(obj) {
-        return isObject(obj) && Object.getPrototypeOf(obj) === Object.prototype;
+        return isObject(obj) && Object.getPrototypeOf(obj) === objPrototype;
     }
 
     function isWindow(obj) {
@@ -95,12 +95,13 @@
         return isObject(obj) && !!obj.jquery;
     }
 
-    function isNode(element) {
-        return element instanceof Node || isObject(element) && element.nodeType === 1;
+    function isNode(obj) {
+        return obj instanceof Node || isObject(obj) && obj.nodeType === 1;
     }
 
-    function isNodeCollection(element) {
-        return element instanceof NodeList || element instanceof HTMLCollection;
+    var toString = objPrototype.toString;
+    function isNodeCollection(obj) {
+        return toString.call(obj).match(/^\[object (NodeList|HTMLCollection)\]$/);
     }
 
     function isBoolean(value) {
@@ -232,14 +233,17 @@
     function noop() {}
 
     function intersectRect(r1, r2) {
-        return r1.left <= r2.right &&
-            r2.left <= r1.right &&
-            r1.top <= r2.bottom &&
-            r2.top <= r1.bottom;
+        return r1.left < r2.right &&
+            r1.right > r2.left &&
+            r1.top < r2.bottom &&
+            r1.bottom > r2.top;
     }
 
     function pointInRect(point, rect) {
-        return intersectRect({top: point.y, bottom: point.y, left: point.x, right: point.x}, rect);
+        return point.x <= rect.right &&
+            point.x >= rect.left &&
+            point.y <= rect.bottom &&
+            point.y >= rect.top;
     }
 
     var Dimensions = {
@@ -334,12 +338,20 @@
     }
 
     function query(selector, context) {
-        return toNode(selector) || find(selector, isContextSelector(selector) ? context : document);
+        return toNode(selector) || find(selector, getContext(selector, context));
     }
 
     function queryAll(selector, context) {
         var nodes = toNodes(selector);
-        return nodes.length && nodes || findAll(selector, isContextSelector(selector) ? context : document);
+        return nodes.length && nodes || findAll(selector, getContext(selector, context));
+    }
+
+    function getContext(selector, context) {
+        if ( context === void 0 ) context = document;
+
+        return isContextSelector(selector) || isDocument(context)
+            ? context
+            : context.ownerDocument;
     }
 
     function find(selector, context) {
@@ -1296,8 +1308,8 @@
     }
 
     var cssPrefixes = ['webkit', 'moz', 'ms'];
-    var ref$1 = document.createElement('_');
-    var style = ref$1.style;
+    var ref = document.createElement('_');
+    var style = ref.style;
 
     function vendorPropName(name) {
 
@@ -1866,6 +1878,19 @@
         var diff = Math.max(0, vp - (height(doc) + heightOffset - (top + elHeight)));
 
         return clamp(((vh + win.pageYOffset - top) / ((vh + (elHeight - (diff < vp ? diff : 0))) / 100)) / 100);
+    }
+
+    function scrollTop(element, top) {
+        element = toNode(element);
+
+        if (isWindow(element) || isDocument(element)) {
+            var ref = window$1(element);
+            var scrollTo = ref.scrollTo;
+            var pageXOffset = ref.pageXOffset;
+            scrollTo(pageXOffset, top);
+        } else {
+            element.scrollTop = top;
+        }
     }
 
     function offsetPosition(element) {
@@ -2552,6 +2577,7 @@
         flipPosition: flipPosition,
         isInView: isInView,
         scrolledOver: scrolledOver,
+        scrollTop: scrollTop,
         isReady: isReady,
         ready: ready,
         index: index,
@@ -2672,7 +2698,7 @@
             mixin = mergeOptions({}, mixin);
             mixin.mixins = component.options.mixins;
             delete component.options.mixins;
-            component.options = mergeOptions(mixin, component.options);
+            component.options = mergeOptions(component.options, mixin);
         };
 
         UIkit.extend = function (options) {
@@ -2688,7 +2714,7 @@
             Sub.prototype.constructor = Sub;
             Sub.options = mergeOptions(Super.options, options);
 
-            Sub['super'] = Super;
+            Sub.super = Super;
             Sub.extend = Super.extend;
 
             return Sub;
@@ -3009,7 +3035,7 @@
             var attrs = ref.attrs;
             var props = ref.props;
             var el = ref.el;
-            if (this._observer || !props || !attrs) {
+            if (this._observer || !props || attrs === false) {
                 return;
             }
 
@@ -3049,7 +3075,9 @@
 
                 if (!isUndefined(value)) {
 
-                    value = coerce(props[key], value);
+                    value = props[key] === Boolean && value === ''
+                        ? true
+                        : coerce(props[key], value);
 
                     if (prop === 'target' && (!value || startsWith(value, '_'))) {
                         continue;
@@ -3808,8 +3836,6 @@
         mixins: [Class, Togglable],
 
         args: 'animation',
-
-        attrs: true,
 
         props: {
             close: String
@@ -4831,8 +4857,6 @@
 
         mixins: [Class],
 
-        attrs: true,
-
         name: 'grid',
 
         props: {
@@ -5141,7 +5165,7 @@
 
                 // IE 11 fix (min-height on a flex container won't apply to its flex items)
                 var height$$1;
-                if (/*isIE && */(height$$1 = Math.round(toFloat(css(this.$el, 'minHeight')))) >= offsetHeight(this.$el)) {
+                if (/* isIE && */(height$$1 = Math.round(toFloat(css(this.$el, 'minHeight')))) >= offsetHeight(this.$el)) {
                     css(this.$el, 'height', height$$1);
                 }
 
@@ -5160,8 +5184,6 @@
     var svgs = {};
 
     var SVG = {
-
-        attrs: true,
 
         props: {
             id: String,
@@ -5555,8 +5577,6 @@
     }
 
     var Img = {
-
-        attrs: true,
 
         props: {
             dataSrc: String,
@@ -6921,7 +6941,7 @@
 
                     var currentY = startY + (target - startY) * ease(clamp((Date.now() - start) / this$1.duration));
 
-                    window.scroll(window.pageXOffset, currentY);
+                    scrollTop(window, currentY);
 
                     // scroll more if we have not reached our destination
                     if (currentY !== target) {
@@ -7213,8 +7233,6 @@
 
         mixins: [Class],
 
-        attrs: true,
-
         props: {
             top: null,
             bottom: Boolean,
@@ -7334,7 +7352,7 @@
                             var elHeight = this$1.$el.offsetHeight;
 
                             if (this$1.isActive && elTop + elHeight >= top && elTop <= top + target.offsetHeight) {
-                                window.scroll(0, top - elHeight - (isNumeric(this$1.targetOffset) ? this$1.targetOffset : 0) - this$1.offset);
+                                scrollTop(window, top - elHeight - (isNumeric(this$1.targetOffset) ? this$1.targetOffset : 0) - this$1.offset);
                             }
 
                         });
@@ -8009,7 +8027,7 @@
 
     }
 
-    UIkit.version = '3.0.0-rc.9';
+    UIkit.version = '3.0.0-rc.11';
 
     core(UIkit);
 

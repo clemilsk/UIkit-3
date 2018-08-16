@@ -338,12 +338,20 @@
     }
 
     function query(selector, context) {
-        return toNode(selector) || find(selector, isContextSelector(selector) ? context : document);
+        return toNode(selector) || find(selector, getContext(selector, context));
     }
 
     function queryAll(selector, context) {
         var nodes = toNodes(selector);
-        return nodes.length && nodes || findAll(selector, isContextSelector(selector) ? context : document);
+        return nodes.length && nodes || findAll(selector, getContext(selector, context));
+    }
+
+    function getContext(selector, context) {
+        if ( context === void 0 ) context = document;
+
+        return isContextSelector(selector) || isDocument(context)
+            ? context
+            : context.ownerDocument;
     }
 
     function find(selector, context) {
@@ -2913,7 +2921,7 @@
             mixin = mergeOptions({}, mixin);
             mixin.mixins = component.options.mixins;
             delete component.options.mixins;
-            component.options = mergeOptions(mixin, component.options);
+            component.options = mergeOptions(component.options, mixin);
         };
 
         UIkit.extend = function (options) {
@@ -2929,7 +2937,7 @@
             Sub.prototype.constructor = Sub;
             Sub.options = mergeOptions(Super.options, options);
 
-            Sub['super'] = Super;
+            Sub.super = Super;
             Sub.extend = Super.extend;
 
             return Sub;
@@ -3250,7 +3258,7 @@
             var attrs = ref.attrs;
             var props = ref.props;
             var el = ref.el;
-            if (this._observer || !props || !attrs) {
+            if (this._observer || !props || attrs === false) {
                 return;
             }
 
@@ -3290,7 +3298,9 @@
 
                 if (!isUndefined(value)) {
 
-                    value = coerce(props[key], value);
+                    value = props[key] === Boolean && value === ''
+                        ? true
+                        : coerce(props[key], value);
 
                     if (prop === 'target' && (!value || startsWith(value, '_'))) {
                         continue;
@@ -3943,8 +3953,6 @@
         mixins: [Class, Togglable],
 
         args: 'animation',
-
-        attrs: true,
 
         props: {
             close: String
@@ -4966,8 +4974,6 @@
 
         mixins: [Class],
 
-        attrs: true,
-
         name: 'grid',
 
         props: {
@@ -5276,11 +5282,7 @@
 
                 // IE 11 fix (min-height on a flex container won't apply to its flex items)
                 var height$$1;
-<<<<<<< HEAD
-                if (/*isIE && */(height$$1 = Math.round(toFloat(css(this.$el, 'minHeight')))) >= offsetHeight(this.$el)) {
-=======
                 if (/* isIE && */(height$$1 = Math.round(toFloat(css(this.$el, 'minHeight')))) >= offsetHeight(this.$el)) {
->>>>>>> 1e3c7a720125c460d0c451d514034c80b4eee779
                     css(this.$el, 'height', height$$1);
                 }
 
@@ -5299,8 +5301,6 @@
     var svgs = {};
 
     var SVG = {
-
-        attrs: true,
 
         props: {
             id: String,
@@ -5694,8 +5694,6 @@
     }
 
     var Img = {
-
-        attrs: true,
 
         props: {
             dataSrc: String,
@@ -7352,8 +7350,6 @@
 
         mixins: [Class],
 
-        attrs: true,
-
         props: {
             top: null,
             bottom: Boolean,
@@ -8039,8 +8035,6 @@
 
         mixins: [Class],
 
-        attrs: true,
-
         props: {
             date: String,
             clsWrapper: String
@@ -8359,8 +8353,6 @@
         mixins: [Animate],
 
         args: 'target',
-
-        attrs: true,
 
         props: {
             target: Boolean,
@@ -9189,8 +9181,6 @@
 
         mixins: [SliderAutoplay, SliderDrag, SliderNav],
 
-        attrs: true,
-
         props: {
             clsActivated: Boolean,
             easing: String,
@@ -9816,8 +9806,6 @@
     var Lightbox = {
 
         install: install$2,
-
-        attrs: true,
 
         props: {toggle: String},
 
@@ -10502,10 +10490,10 @@
 
         var from = prev
             ? getLeft(prev, list, center)
-            : getLeft(next, list, center) + next.offsetWidth * dir;
+            : getLeft(next, list, center) + bounds(next).width * dir;
         var to = next
             ? getLeft(next, list, center)
-            : from + prev.offsetWidth * dir * (isRtl ? -1 : 1);
+            : from + bounds(prev).width * dir * (isRtl ? -1 : 1);
 
         return {
 
@@ -10559,7 +10547,7 @@
                 css(list, 'transform', translate(clamp(
                     -to + (distance - distance * percent),
                     -getWidth(list),
-                    list.offsetWidth
+                    bounds(list).width
                 ) * (isRtl ? -1 : 1), 'px'));
 
                 this.updateTranslates();
@@ -10598,7 +10586,7 @@
 
                 return sortBy(slides(list).filter(function (slide) {
                     var slideLeft = getElLeft(slide, list);
-                    return slideLeft >= left && slideLeft + slide.offsetWidth <= list.offsetWidth + left;
+                    return slideLeft >= left && slideLeft + bounds(slide).width <= bounds(list).width + left;
                 }), 'offsetLeft');
 
             },
@@ -10632,23 +10620,27 @@
     }
 
     function getMax(list) {
-        return Math.max(0, getWidth(list) - list.offsetWidth);
+        return Math.max(0, getWidth(list) - bounds(list).width);
     }
 
     function getWidth(list) {
-        return slides(list).reduce(function (right, el) { return el.offsetWidth + right; }, 0);
+        return slides(list).reduce(function (right, el) { return bounds(el).width + right; }, 0);
     }
 
     function getMaxWidth(list) {
-        return slides(list).reduce(function (right, el) { return Math.max(right, el.offsetWidth); }, 0);
+        return slides(list).reduce(function (right, el) { return Math.max(right, bounds(el).width); }, 0);
     }
 
     function centerEl(el, list) {
-        return list.offsetWidth / 2 - el.offsetWidth / 2;
+        return bounds(list).width / 2 - bounds(el).width / 2;
     }
 
     function getElLeft(el, list) {
-        return (el.offsetLeft + (isRtl ? el.offsetWidth - list.offsetWidth : 0)) * (isRtl ? -1 : 1);
+        return (position(el).left + (isRtl ? bounds(el).width - bounds(list).width : 0)) * (isRtl ? -1 : 1);
+    }
+
+    function bounds(el) {
+        return el.getBoundingClientRect();
     }
 
     function triggerUpdate$1(el, type, data$$1) {
@@ -10687,7 +10679,7 @@
             finite: function(ref) {
                 var finite = ref.finite;
 
-                return finite || getWidth(this.list) < this.list.offsetWidth + getMaxWidth(this.list) + this.center;
+                return finite || getWidth(this.list) < bounds(this.list).width + getMaxWidth(this.list) + this.center;
             },
 
             maxIndex: function() {
@@ -10721,7 +10713,7 @@
                 var sets = ref.sets;
 
 
-                var width$$1 = this.list.offsetWidth / (this.center ? 2 : 1);
+                var width$$1 = bounds(this.list).width / (this.center ? 2 : 1);
 
                 var left = 0;
                 var leftCenter = width$$1;
@@ -10729,7 +10721,7 @@
 
                 sets = sets && this.slides.reduce(function (sets, slide, i) {
 
-                    var ref = offset(slide);
+                    var ref = bounds(slide);
                     var slideWidth = ref.width;
                     var slideRight = slideLeft + slideWidth;
 
@@ -10742,7 +10734,7 @@
                         if (!includes(sets, i)) {
 
                             var cmp = this$1.slides[i + 1];
-                            if (this$1.center && cmp && slideWidth < leftCenter - offset(cmp).width / 2) {
+                            if (this$1.center && cmp && slideWidth < leftCenter - bounds(cmp).width / 2) {
                                 leftCenter -= slideWidth;
                             } else {
                                 leftCenter = width$$1;
@@ -10820,11 +10812,11 @@
                 }
 
                 this.duration = speedUp(this.avgWidth / this.velocity)
-                    * ((
+                    * (bounds(
                         this.dir < 0 || !this.slides[this.prevIndex]
                             ? this.slides[this.index]
                             : this.slides[this.prevIndex]
-                    ).offsetWidth / this.avgWidth);
+                    ).width / this.avgWidth);
 
                 this.reorder();
 
@@ -10871,7 +10863,7 @@
                 }
 
                 var next = this.slides[index$$1];
-                var width$$1 = this.list.offsetWidth / 2 - next.offsetWidth / 2;
+                var width$$1 = bounds(this.list).width / 2 - bounds(next).width / 2;
                 var j = 0;
 
                 while (width$$1 > 0) {
@@ -10879,7 +10871,7 @@
                     var slide = this$1.slides[slideIndex];
 
                     css(slide, 'order', slideIndex > index$$1 ? -2 : -1);
-                    width$$1 -= slide.offsetWidth;
+                    width$$1 -= bounds(slide).width;
                 }
 
             },
@@ -11504,8 +11496,6 @@
         mixins: [Container, Togglable, Position],
 
         args: 'title',
-
-        attrs: true,
 
         props: {
             delay: Number,
